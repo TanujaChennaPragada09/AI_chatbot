@@ -1,0 +1,186 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>🤖 TanujaNikitha AI Chat Bot</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--accent:#6bcf7f;--dark:#202123;--dark2:#2a2b32}
+
+body{
+  font-family:Poppins;
+  background:linear-gradient(135deg,#f8cdda,#d1fdff);
+  height:100vh;display:flex;overflow:hidden;
+}
+
+#bot-bubbles{position:fixed;inset:0;z-index:-1}
+.bot-bubble{position:absolute;font-size:42px;opacity:.12;animation:float 20s linear infinite}
+@keyframes float{from{transform:translateY(110vh)}to{transform:translateY(-20vh)}}
+
+.sidebar{
+  width:260px;background:var(--dark);color:#fff;padding:14px
+}
+.history{overflow-y:auto}
+.history-item{
+  background:var(--dark2);padding:10px;margin-bottom:6px;
+  border-radius:8px;font-size:13px;cursor:pointer
+}
+
+.chat-area{flex:1;display:flex;justify-content:center}
+.chat-app{
+  width:100%;max-width:420px;
+  background:rgba(255,255,255,.95);
+  display:flex;flex-direction:column
+}
+
+.header{padding:14px;background:var(--accent);color:#fff;font-weight:600}
+#chat-box{flex:1;padding:15px;overflow-y:auto}
+
+.message{padding:12px 16px;border-radius:18px;max-width:80%;margin-bottom:8px}
+.user{background:var(--accent);color:#fff;margin-left:auto}
+.bot{background:#e9e9eb}
+
+.input-bar{display:flex;gap:8px;padding:10px}
+.input-bar input{flex:1;padding:14px;border-radius:20px;border:none}
+.input-bar button{
+  width:44px;height:44px;border-radius:50%;
+  border:none;background:var(--accent);color:#fff;
+  cursor:pointer;
+}
+
+#file-input{display:none}
+
+@media(max-width:600px){
+  .sidebar{display:none}
+  .chat-app{max-width:none}
+}
+</style>
+</head>
+
+<body>
+
+<div id="bot-bubbles"></div>
+
+<div class="sidebar">
+  <h3>💬 History</h3>
+  <div id="history" class="history"></div>
+</div>
+
+<div class="chat-area">
+<div class="chat-app">
+  <div class="header">🤖 TanujaNikitha AI Chat Bot</div>
+  <div id="chat-box"></div>
+
+  <div class="input-bar">
+    <input id="user-input" placeholder="Ask me anything"
+      onkeydown="if(event.key==='Enter')sendMessage()">
+    <button onclick="sendMessage()">➤</button>
+    <button onclick="startVoice()">🎤</button>
+
+    <!-- FILE UPLOAD -->
+    <label for="file-input">
+      <button type="button">📂</button>
+    </label>
+    <input id="file-input" type="file" onchange="uploadFile(this)">
+  </div>
+</div>
+</div>
+
+<script>
+const API="http://13.219.182.146:8080";
+let recognition;
+let continuous=true;
+
+for(let i=0;i<15;i++){
+  let b=document.createElement("div");
+  b.className="bot-bubble"; b.innerText="🤖";
+  b.style.left=Math.random()*100+"%";
+  document.getElementById("bot-bubbles").appendChild(b);
+}
+
+const chatBox=document.getElementById("chat-box");
+const historyBox=document.getElementById("history");
+const userInput=document.getElementById("user-input");
+
+function append(text,type){
+  let d=document.createElement("div");
+  d.className="message "+type;
+  d.innerText=text;
+  chatBox.appendChild(d);
+  chatBox.scrollTop=chatBox.scrollHeight;
+}
+
+async function sendMessage(text=null){
+  let msg=text||userInput.value.trim();
+  if(!msg) return;
+  append(msg,"user");
+  userInput.value="";
+
+  let r=await fetch(API+"/chat",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({message:msg})
+  });
+  let d=await r.json();
+  append(d.response,"bot");
+  speak(d.response);
+  loadHistory();
+}
+
+async function uploadFile(input){
+  let file=input.files[0];
+  if(!file) return;
+
+  append("📂 "+file.name,"user");
+
+  let fd=new FormData();
+  fd.append("file",file);
+
+  let r=await fetch(API+"/upload",{
+    method:"POST",
+    body:fd
+  });
+  let d=await r.json();
+  append(d.response,"bot");
+}
+
+async function loadHistory(){
+  let r=await fetch(API+"/history");
+  let data=await r.json();
+  historyBox.innerHTML="";
+  data.forEach(x=>{
+    let div=document.createElement("div");
+    div.className="history-item";
+    div.innerText=x.role.toUpperCase()+": "+x.message.slice(0,40);
+    div.onclick=()=>append(x.message,x.role);
+    historyBox.appendChild(div);
+  });
+}
+loadHistory();
+
+function speak(text){
+  speechSynthesis.cancel();
+  let u=new SpeechSynthesisUtterance(text);
+  u.onend=()=>{ if(continuous) startVoice(); };
+  speechSynthesis.speak(u);
+}
+
+function startVoice(){
+  let R=window.SpeechRecognition||webkitSpeechRecognition;
+  if(!R) return alert("Mic needs HTTPS");
+  if(!recognition){
+    recognition=new R();
+    recognition.onresult=e=>sendMessage(e.results[0][0].transcript);
+  }
+  recognition.start();
+}
+</script>
+
+</body>
+</html>
+
